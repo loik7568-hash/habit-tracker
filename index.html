@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>습관 트래커</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Apple SD Gothic Neo', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f5f4f0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 20px 14px;
+  }
+  .wrap { width: 100%; max-width: 380px; }
+  .card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .week-label { font-size: 11px; color: #999; font-weight: 500; margin-bottom: 2px; }
+  .week-count { font-size: 30px; font-weight: 700; color: #1a1a1a; line-height: 1.1; }
+  .week-count span { font-size: 18px; color: #bbb; font-weight: 400; }
+  .pct-label { font-size: 11px; color: #bbb; text-align: right; margin-bottom: 2px; }
+  .pct-val { font-size: 26px; font-weight: 700; color: #1a1a1a; text-align: right; }
+  .sparkline-wrap { margin-top: 6px; display: flex; justify-content: flex-end; }
+  .grid-header {
+    display: grid;
+    grid-template-columns: 68px repeat(7, 1fr) 30px;
+    margin-bottom: 8px;
+  }
+  .day-label { text-align: center; font-size: 11px; color: #bbb; font-weight: 400; }
+  .day-label.today { color: #1a1a1a; font-weight: 700; }
+  .habit-row {
+    display: grid;
+    grid-template-columns: 68px repeat(7, 1fr) 30px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .habit-name { font-size: 13px; color: #333; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px; }
+  .dot-wrap { display: flex; justify-content: center; }
+  .dot { width: 24px; height: 24px; border-radius: 50%; background: #e0e0e0; cursor: pointer; transition: background 0.15s, transform 0.1s; }
+  .dot:hover { transform: scale(1.1); }
+  .dot.checked { background: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .dot.future { background: #f0f0f0; opacity: 0.4; cursor: default; pointer-events: none; }
+  .habit-score { font-size: 11px; color: #bbb; text-align: right; padding-left: 2px; }
+  .add-btn { width: 100%; border: 1.5px dashed #ddd; background: none; border-radius: 10px; padding: 7px; font-size: 13px; color: #bbb; cursor: pointer; margin-top: 4px; font-family: inherit; }
+  .add-btn:hover { border-color: #aaa; color: #aaa; }
+  .add-row { display: flex; gap: 6px; margin-top: 4px; }
+  .add-input { flex: 1; border: 1px solid #e0e0e0; border-radius: 8px; padding: 6px 10px; font-size: 13px; outline: none; background: #fafafa; font-family: inherit; }
+  .add-input:focus { border-color: #aaa; }
+  .btn-confirm { background: #1a1a1a; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn-cancel { background: #f0f0f0; color: #888; border: none; border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: #fff; border: 1px solid #eee; border-radius: 20px; padding: 4px 10px; font-size: 12px; color: #bbb; cursor: pointer; font-family: inherit; }
+  .tag:hover { color: #e55; border-color: #e55; }
+  .footer { text-align: center; margin-top: 14px; font-size: 11px; color: #ccc; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="header-card">
+    <div class="header">
+      <div>
+        <div class="week-label">이번 주</div>
+        <div class="week-count"><span id="done-count">0</span><span>/<span id="total-count">0</span></span></div>
+      </div>
+      <div>
+        <div class="pct-label">달성률</div>
+        <div class="pct-val"><span id="pct">0</span>%</div>
+      </div>
+    </div>
+    <div class="sparkline-wrap">
+      <svg id="sparkline" width="120" height="40" style="overflow:visible"></svg>
+    </div>
+  </div>
+  <div class="card" id="grid-card">
+    <div class="grid-header">
+      <div></div>
+      <div class="day-label" data-day="0">월</div>
+      <div class="day-label" data-day="1">화</div>
+      <div class="day-label" data-day="2">수</div>
+      <div class="day-label" data-day="3">목</div>
+      <div class="day-label" data-day="4">금</div>
+      <div class="day-label" data-day="5">토</div>
+      <div class="day-label" data-day="6">일</div>
+      <div></div>
+    </div>
+    <div id="habit-rows"></div>
+    <div id="add-area">
+      <button class="add-btn" onclick="showAddInput()">+ 습관 추가</button>
+    </div>
+  </div>
+  <div class="card" style="padding:12px 14px;" id="delete-card">
+    <div class="tag-list" id="tag-list"></div>
+  </div>
+  <div class="footer">데이터는 이 브라우저에 저장돼요</div>
+</div>
+<script>
+const DAYS = ["월","화","수","목","금","토","일"];
+
+function getWeekKey() {
+  var now = new Date();
+  var day = now.getDay();
+  var diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  var mon = new Date(now); mon.setDate(diff);
+  return mon.getFullYear() + "-" + (mon.getMonth()+1) + "-" + mon.getDate();
+}
+
+function getTodayIdx() {
+  var d = new Date().getDay();
+  return d === 0 ? 6 : d - 1;
+}
+
+const WEEK_KEY = getWeekKey();
+const TODAY = getTodayIdx();
+
+function tryLoad(key, fallback) {
+  try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e) { return fallback; }
+}
+
+function trySave(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+}
+
+var habits = tryLoad('habits', [
+  {id:1, name:"운동", emoji:"🏃"},
+  {id:2, name:"독서", emoji:"📚"},
+  {id:3, name:"명상", emoji:"🧘"}
+]);
+var checks = tryLoad('checks-' + WEEK_KEY, {});
+habits.forEach(function(h) {
+  if (!checks[h.id]) checks[h.id] = [false,false,false,false,false,false,false];
+});
+
+function saveAll() {
+  trySave('habits', habits);
+  trySave('checks-' + WEEK_KEY, checks);
+}
+
+function savePctHistory(pct) {
+  var history = tryLoad('pct-history-weeks', []);
+  var found = false;
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].week === WEEK_KEY) { history[i].pct = pct; found = true; break; }
+  }
+  if (!found) history.push({ week: WEEK_KEY, pct: pct });
+  if (history.length > 8) history = history.slice(history.length - 8);
+  trySave('pct-history-weeks', history);
+  return history.map(function(h) { return h.pct; });
+}
+
+function toggle(hid, dayIdx) {
+  if (dayIdx > TODAY) return;
+  checks[hid][dayIdx] = !checks[hid][dayIdx];
+  saveAll();
+  render();
+}
+
+function render() {
+  document.querySelectorAll('.day-label').forEach(function(el) {
+    var i = +el.dataset.day;
+    el.classList.toggle('today', i === TODAY);
+  });
+
+  var container = document.getElementById('habit-rows');
+  container.innerHTML = '';
+  habits.forEach(function(h) {
+    var row = checks[h.id] || [false,false,false,false,false,false,false];
+    var done = row.slice(0, TODAY+1).filter(Boolean).length;
+    var div = document.createElement('div');
+    div.className = 'habit-row';
+    var html = '<div class="habit-name">' + h.emoji + ' ' + h.name + '</div>';
+    for (var i = 0; i < 7; i++) {
+      var cls = 'dot' + (row[i] ? ' checked' : '') + (i > TODAY ? ' future' : '');
+      html += '<div class="dot-wrap"><div class="' + cls + '" onclick="toggle(' + h.id + ',' + i + ')"></div></div>';
+    }
+    html += '<div class="habit-score">' + done + '/7</div>';
+    div.innerHTML = html;
+    container.appendChild(div);
+  });
+
+  var tagList = document.getElementById('tag-list');
+  tagList.innerHTML = habits.map(function(h) {
+    return '<button class="tag" onclick="removeHabit(' + h.id + ')">' + h.emoji + ' ' + h.name + ' &times;</button>';
+  }).join('');
+
+  var total = habits.length * (TODAY + 1);
+  var done = habits.reduce(function(s,h) {
+    return s + (checks[h.id]||[]).slice(0,TODAY+1).filter(Boolean).length;
+  }, 0);
+  var pct = total > 0 ? Math.round(done/total*100) : 0;
+  document.getElementById('done-count').textContent = done;
+  document.getElementById('total-count').textContent = total;
+  document.getElementById('pct').textContent = pct;
+
+  var historyData = savePctHistory(pct);
+  drawSparkline(historyData);
+
+  document.getElementById('delete-card').style.display = habits.length ? '' : 'none';
+}
+
+function drawSparkline(data) {
+  if (data.length < 2) {
+    data = [0, data[0] || 0];
+  }
+  var svg = document.getElementById('sparkline');
+  var max = Math.max.apply(null, data.concat([1]));
+  var w = 120, h = 40, p = 4;
+  var pts = data.map(function(v, i) {
+    var x = p + (i / (data.length - 1)) * (w - p * 2);
+    var y = h - p - (v / max) * (h - p * 2);
+    return x + ',' + y;
+  }).join(' ');
+  svg.innerHTML = '<polyline points="' + pts + '" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.2"/>';
+}
+
+function showAddInput() {
+  document.getElementById('add-area').innerHTML =
+    '<div class="add-row">' +
+    '<input class="add-input" id="new-habit-input" placeholder="습관 이름" onkeydown="if(event.key===\'Enter\')confirmAdd()">' +
+    '<button class="btn-confirm" onclick="confirmAdd()">추가</button>' +
+    '<button class="btn-cancel" onclick="cancelAdd()">취소</button>' +
+    '</div>';
+  document.getElementById('new-habit-input').focus();
+}
+
+function confirmAdd() {
+  var val = document.getElementById('new-habit-input').value.trim();
+  if (!val) return;
+  var emojis = ['⭐','🎯','💪','🌱','✏️','🎵','💧','🍎'];
+  var id = Date.now();
+  habits.push({ id: id, name: val, emoji: emojis[habits.length % emojis.length] });
+  checks[id] = [false,false,false,false,false,false,false];
+  saveAll();
+  cancelAdd();
+  render();
+}
+
+function cancelAdd() {
+  document.getElementById('add-area').innerHTML =
+    '<button class="add-btn" onclick="showAddInput()">+ 습관 추가</button>';
+}
+
+function removeHabit(id) {
+  habits = habits.filter(function(h) { return h.id !== id; });
+  delete checks[id];
+  saveAll();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
